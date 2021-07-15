@@ -1,0 +1,107 @@
+version: '3'
+
+services:
+  authenticationDB:
+    image: mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=root
+    healthcheck:
+      test: ["CMD","mysqladmin","ping","-h","localhost"]
+      timeout: 10s
+      retries: 10
+    volumes:
+      - dbdata:/var/lib/mysql
+    networks:
+      authenticationNET:
+  authenticationDBMigration:
+    image: authenticationdbmigration
+    environment:
+      - DATABASE_URL=authenticationDB
+    depends_on:
+      authenticationDB:
+        condition: service_healthy
+    networks:
+      authenticationNET:
+  authentication:
+    image: authentication
+    environment:
+      - DATABASE_URL=authenticationDB
+    depends_on:
+      - authenticationDBMigration
+    ports:
+      - 5002:5002
+    networks:
+      authenticationNET:
+  redis:
+    image: redis
+    ports:
+      - 6379:6379
+    networks:
+      votingNET:
+  votingDBMigration:
+    image: votingdbmigration
+    environment:
+      - DATABASE_URL=votingDB
+    depends_on:
+      votingDB:
+        condition: service_healthy
+    networks:
+      votingNET:
+  votingDB:
+    image: mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=root
+    healthcheck:
+      test: [ "CMD","mysqladmin","ping","-h","localhost" ]
+      timeout: 10s
+      retries: 10
+    volumes:
+      - dbdata:/var/lib/mysql
+    networks:
+      votingNET:
+  deamon:
+    image: deamon
+    environment:
+      - DATABASE_URL=votingDB
+      - redishost=redis
+    networks:
+      votingNET:
+    depends_on:
+      - votingDBMigration
+      - votingDB
+      - redis
+  voting:
+    image: votingstation
+    environment:
+      - DATABASE_URL=votingDB
+      - redishost=redis
+    depends_on:
+      - votingDBMigration
+      - deamon
+      - redis
+    ports:
+      - 5003:5003
+    networks:
+      votingNET:
+  admin:
+    image: admin
+    environment:
+      - DATABASE_URL=votingDB
+    depends_on:
+      - votingDBMigration
+    ports:
+      - 5001:5001
+    networks:
+      votingNET:
+  adminer:
+    image: adminer
+    ports:
+      - 8080:8080
+    networks:
+      votingNET:
+      authenticationNET:
+volumes:
+  dbdata:
+networks:
+  votingNET:
+  authenticationNET:
